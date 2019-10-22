@@ -1,0 +1,78 @@
+---
+title: "Lab006"
+author: "Yueyang Zhang"
+date: "October 14, 2019"
+output: html_document
+---
+
+
+## Read Data
+
+```{r 1}
+library(tidyverse)
+library(ggplot2)
+library(ggcorrplot)
+library(modelr)
+bike <- read_csv("data/day.csv")
+```
+
+## Step 1: Data Visualization
+
+Take a look at the first plot to see the effect of variable "dteday"(date) and categorical variable "weathersit"(weather situations), total counts of using is increasing over time, and there is some seasonality pattern: during the summer season, the use of rental bikes dramatically increases and during winter season it decreases to the bottom. Notice during snowy or rainy days, the use of rental bikes decrease sharply. Humidity also has slight effect on cnt: higher humidity seems to increase the number of bike rentals.
+```{r 2}
+plot1 <- bike %>% mutate(cate_weathersit = factor(weathersit)) %>% ggplot(aes(dteday, cnt))+geom_point(aes(color = hum), alpha= 0.5) +facet_wrap(~ cate_weathersit)
+print(plot1 + ggtitle(label = "Total Rentals of Bikes by dates", subtitle = "Grided by Weather Situation, Colored in Humidity") + xlab("Date") + ylab("Counts of Total Rentals") + theme(plot.title = element_text(hjust= 0.5, color = "red", size = 15, face = "bold"),  plot.subtitle = element_text(hjust = 0.5, color = "blue")))
+
+```
+
+```{r 3}
+plot2 <- bike %>% ggplot(aes(windspeed, cnt))+geom_point(aes(color=atemp, shape= factor(workingday)))
+print(plot2 + ggtitle(label = "Total Rental of Bikes by Dates", subtitle = "Differed by Temperature and Workingdays") + xlab("Windspeed") +
+        ylab("Counts of Total Rentals") + theme(plot.title = element_text(hjust= 0.5, color = "red", size = 15, face = "bold"),  plot.subtitle = element_text(hjust = 0.5, color = "blue")))
+```
+
+The second plot again tells us that total number of bike rentals decreases at low normalized feeling temperature. There is a subtle decreasing trend of total bike rentals for windspeed greater than 0.3. When we separate the data between workingdays and nonworkingdays, the decreasing trend with respect to increase in windspeed is vividly displayed in the graph.
+
+## Step 2: Variable Selection
+
+From the visualization of the graph above We decide to select variables "dteday", "hum", "atemp", "windspeed", "weathersit". First create the scatter matrix for the variables. Notice that variable "weathersit" is a categorical variable that has been factored into 3 levels, we don't add it in the scatter matrix.
+
+```{r 4}
+pairs(~cnt + dteday + atemp + hum + windspeed, data = bike, gap = 1, pch = 10)
+```
+
+Notice from the scatter matrix that there is colinearity shown between two predictor variable "dteday" and "atemp". So we have to omit one of them to avoid colinearity bias. Here we omit date variable "dteday". The selected variables have the following correlation matrix and the corresponding p-value matrix:
+
+```{r 5}
+bike2 <- bike %>% select(cnt, atemp, hum, windspeed, weathersit)
+(corr <- round(cor(bike2), 3))
+(p.mat <- cor_pmat(bike2))
+ggcorrplot(corr) + ggtitle("Correlation Matrices") + theme(plot.title = element_text(hjust= 0.5, color = "red", size = 15, face = "bold"))
+```
+
+From the correlation plots shown above, again we have seen some colinearity between weathersituation and humidity which make sense(Sunny, Cloudy, Rainy weather clearly have different humidity). In this case, we omit variable "weathersit" because it is a categorical variable which is not continuous and harder to model. 
+
+## Step 3: Modeling Data
+
+Now we fit the MLR: to make the variation constant, we log-transform variable "windspeed", and fit an additional quadratic term on variable "atemp" which is more likely than one-degree polynomial because we expect the number of bike rentals would decrease exponentially fast as feeling temperature drops.
+
+```{r 6}
+mfit <- lm(cnt ~ atemp + I(atemp^2)+ log(windspeed) + hum , data = bike2)
+summary(mfit)
+(beta <- coef(mfit))
+```
+
+The fitted formula is: Counts of Total Rentals = -1861 + 27068 * FeelingTemperature - 20871.3 * (FeelingTemperature) ^ 2 - 764.1 * log(Windspeed) - 4075.4 * Humidity. The p-value for all predictor variables are extremely small, indicating their significancy. 53.89% of the variability of the data can be explained by the model.
+
+## Step 4: Interpret Residual Plots
+
+...............
+...............
+...............
+
+```{r 7}
+bike2 %>% add_residuals(mfit) %>% add_predictions(mfit) %>% ggplot(aes(pred, resid)) +
+geom_ref_line(h = 0) + geom_point() +ggtitle("Standardized Residual Plots") + ylab("Standardized Residuals") + xlab("Prediction Values") + theme(plot.title = element_text(hjust= 0.5, color = "red", size = 15, face = "bold"))
+
+```
+
